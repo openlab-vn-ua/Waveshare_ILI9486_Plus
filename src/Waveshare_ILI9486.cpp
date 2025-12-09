@@ -37,14 +37,16 @@ namespace Waveshare_ILI9486_Config
 	//  the reboot process.  D1 is Serial TX, you probably want that for debugging.
 	//  So, you can't plug the shield into a D1 R1, you need to map the pins.
 	//
-	static inline int LCD_CS = D10; //  LCD Chip Select
-	static inline int LCD_BL = D8;  //  LCD Backlight
-	static inline int LCD_RST = D4;  //  LCD Reset
-	static inline int LCD_DC = D3;  //  LCD Data/Control
+	int LCD_CS = D10; //  LCD Chip Select
+	int LCD_BL = D8;  //  LCD Backlight
+	int LCD_RST = D4;  //  LCD Reset
+	int LCD_DC = D3;  //  LCD Data/Control
 
-	static inline int TP_CS = D0;
+	int TP_CS = D0;
+	int TP_IRQ = -1;   // -1=unused (just not init)
+	int TP_BUSY = -1; // -1=unused (just not init)
 
-	static inline int SD_CS = D2;
+	int SD_CS = D2;
 #elif defined ARDUINO_ESP32_DEV
 
 	//  TO-DO - is this specific enough?  Pins below are for Wemos D1 R32, but that
@@ -57,61 +59,59 @@ namespace Waveshare_ILI9486_Config
 		digitalWrite(pin, val ? HIGH : LOW);
 	}
 
-	static inline int LCD_CS = 5;  // 10; //  LCD Chip Select
-	static inline int LCD_BL = 13; // 9;  //  LCD Backlight
-	static inline int LCD_RST = 12; // 8;  //  LCD Reset
-	static inline int LCD_DC = 14; // 7;  //  LCD Data/Control
+	int LCD_CS = 5;  // 10; //  LCD Chip Select
+	int LCD_BL = 13; // 9;  //  LCD Backlight
+	int LCD_RST = 12; // 8;  //  LCD Reset
+	int LCD_DC = 14; // 7;  //  LCD Data/Control
 
-	static inline int TP_CS = 17;   // 4;
-	static inline int TP_IRQ = 25;  // 3
-	static inline int TP_BUSY = 27; // 6
+	int TP_CS = 17;   // 4;
+	int TP_IRQ = 25;  // 3
+	int TP_BUSY = 27; // 6
 
-	static inline int SD_CS = 16;   // 5;
+	int SD_CS = 16;   // 5;
 
 #elif defined(ARDUINO_ARCH_RP2040)
 
 	//GPIO config
 	// LCD
-	static inline int LCD_CS = 5;   //  LCD Chip Select
-	static inline int LCD_BL = -1;  //  LCD Backlight -1=unused
-	static inline int LCD_RST = 10; //  LCD Reset
-	static inline int LCD_DC = 11;  //  LCD Data/Control
+	int LCD_CS = 5;   //  LCD Chip Select
+	int LCD_BL = -1;  //  LCD Backlight -1=unused
+	int LCD_RST = 10; //  LCD Reset
+	int LCD_DC = 11;  //  LCD Data/Control
 
 	// Touch panel
-	static inline int TP_CS = 7;    // UNUSED
-	static inline int TP_IRQ = 8;   // UNUSED
-	static inline int TP_BUSY = 12; // UNUSED
+	int TP_CS = 7;    // -1=unused
+	int TP_IRQ = 8;   // -1=unused (just not init)
+	int TP_BUSY = 12; // -1=unused (just not init)
 
-	static inline int SD_CS = 13;   // UNUSED
-
-	// SPI Channel to use (SPI or SPI1)
-	static auto&      MAIN_SPI = SPI; // By default spi0
+	int SD_CS = 13;   // -1=unused (just not init)
 
 #else
 
 	//GPIO config
 	//LCD
-	static inline LCD_CS = 10; //  LCD Chip Select
-	static inline LCD_BL = 9;  //  LCD Backlight
-	static inline LCD_RST = 8;  //  LCD Reset
-	static inline LCD_DC = 7;  //  LCD Data/Control
+	int LCD_CS = 10; //  LCD Chip Select
+	int LCD_BL = 9;  //  LCD Backlight
+	int LCD_RST = 8;  //  LCD Reset
+	int LCD_DC = 7;  //  LCD Data/Control
 
-	static inline TP_CS = 4;
-	static inline TP_IRQ = 3;
-	static inline TP_BUSY = 6;
+	int TP_CS = 4;
+	int TP_IRQ = 3;
+	int TP_BUSY = 6;
 
-	static inline SD_CS = 5;
+	int SD_CS = 5;
 
 #endif
+
+	// SPI Channel to use (SPI or SPI1)
+	decltype(SPI)&  SPI_PORT = SPI; // By default spi0
+
+	#if defined(ARDUINO_ARCH_RP2040)
+	decltype(spi0) getPicoSPI(decltype(SPI)& s) { return (((&(s)) == &(SPI)) ? spi0 : spi1); }
+	#endif
 }
 
-#if defined(ARDUINO_ARCH_RP2040)
-	#define SPI MAIN_SPI
-#endif
-
-#if defined(ARDUINO_ARCH_RP2040)
-	#define getPicoSPI(s) (((&(s)) == &(SPI)) ? spi0 : spi1)
-#endif
+#define SPI SPI_PORT // to keep changes minimum
 
 namespace
 {
@@ -389,13 +389,27 @@ namespace Waveshare_ILI9486_Impl
 			analogWrite(LCD_BL, 0);
 		}
 
-		pinMode(TP_CS, OUTPUT);
-		digitalWrite(TP_CS, HIGH);
-		pinMode(TP_IRQ, INPUT_PULLUP);
-		pinMode(TP_BUSY, INPUT_PULLUP);
+		if (TP_CS >= 0)
+		{
+			pinMode(TP_CS, OUTPUT);
+			digitalWrite(TP_CS, HIGH);
 
-		pinMode(SD_CS, OUTPUT);
-		digitalWrite(SD_CS, HIGH);
+			if (TP_IRQ >= 0)
+			{
+				pinMode(TP_IRQ, INPUT_PULLUP);
+			}
+
+			if (TP_BUSY >= 0)
+			{
+				pinMode(TP_BUSY, INPUT_PULLUP);
+			}
+		}
+
+		if (SD_CS >= 0)
+		{
+			pinMode(SD_CS, OUTPUT);
+			digitalWrite(SD_CS, HIGH);
+		}
 	}
 
 	void startWrite()
@@ -674,8 +688,10 @@ namespace
 {
 	uint16_t readChannel(uint8_t channel)
 	{
-		uint16_t data = 0;
+		if (TP_CS < 0) { return 0; }
 
+		uint16_t data = 0;
+		
 		SPI.beginTransaction(tsSpiSettings);
 		digitalWrite(TP_CS, LOW);
 
@@ -912,9 +928,5 @@ WaveshareTouchScreen::normalizeTsPoint(
 }
 
 #if defined(ARDUINO_ARCH_RP2040)
-	#undef SPI
-#endif
-
-#if defined(ARDUINO_ARCH_RP2040)
-	#undef getPicoSPI
+#undef SPI
 #endif

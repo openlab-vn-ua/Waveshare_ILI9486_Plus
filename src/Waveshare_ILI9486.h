@@ -105,7 +105,27 @@ public:
 
 };
 
+#include <SPI.h>
 
+namespace Waveshare_ILI9486_Config
+{
+	// System SETUP (change before begin)
+
+	extern int LCD_CS;  //  LCD Chip Select
+	extern int LCD_BL;  //  LCD Backlight -1=unused
+	extern int LCD_RST; //  LCD Reset
+	extern int LCD_DC;  //  LCD Data/Control
+
+	// Touch panel
+	extern int TP_CS;
+	extern int TP_IRQ;
+	extern int TP_BUSY;
+
+	extern int SD_CS;
+
+	// SPI Channel to use // By default SPI // on pi pico may be SPI/SPI1
+	extern decltype(SPI)& SPI_PORT;
+}
 
 //  Straight hardware access.
 namespace Waveshare_ILI9486_Impl
