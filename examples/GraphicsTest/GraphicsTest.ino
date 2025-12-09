@@ -494,7 +494,55 @@ void setup()
 	Serial.begin(115200);
 	while (!Serial);
 
-	SPI.begin();
+	/* PI PICO SPI default pinout
+	#define PIN_SPI0_MISO  (16u)
+	#define PIN_SPI0_MOSI  (19u)
+	#define PIN_SPI0_SCK   (18u)
+	#define PIN_SPI0_SS    (17u)
+
+	#define PIN_SPI1_MISO  (12u)
+	#define PIN_SPI1_MOSI  (15u)
+	#define PIN_SPI1_SCK   (14u)
+	#define PIN_SPI1_SS    (13u)
+	*/
+
+	// Default pi pico config example
+	/*
+	Waveshare_ILI9486_Config::LCD_CS   = 5;
+	Waveshare_ILI9486_Config::LCD_BL   = -1;
+	Waveshare_ILI9486_Config::LCD_RST  = 10;
+	Waveshare_ILI9486_Config::LCD_DC   = 11;
+	Waveshare_ILI9486_Config::TP_CS    = 7;
+	Waveshare_ILI9486_Config::TP_IRQ   = 8;
+	Waveshare_ILI9486_Config::TP_BUSY  = 12;
+	Waveshare_ILI9486_Config::SD_CS    = 13;
+	if (0) {
+	Waveshare_ILI9486_Config::setSPI(SPI);
+	Waveshare_ILI9486_Config::getSPI().setMOSI(19);
+	Waveshare_ILI9486_Config::getSPI().setMISO(16);
+	Waveshare_ILI9486_Config::getSPI().setSCK(18);
+	Waveshare_ILI9486_Config::getSPI().setCS(Waveshare_ILI9486_Config::LCD_CS);
+	}
+	*/
+
+	/*
+	// pi pico SPI1 config example
+	Waveshare_ILI9486_Config::LCD_CS   = 13;
+	Waveshare_ILI9486_Config::LCD_BL   = -1;
+	Waveshare_ILI9486_Config::LCD_RST  = 9;
+	Waveshare_ILI9486_Config::LCD_DC   = 8;
+	Waveshare_ILI9486_Config::TP_CS    = -1;
+	Waveshare_ILI9486_Config::TP_IRQ   = -1;
+	Waveshare_ILI9486_Config::TP_BUSY  = -1;
+	Waveshare_ILI9486_Config::SD_CS    = -1;
+	Waveshare_ILI9486_Config::setSPI(SPI1);
+	Waveshare_ILI9486_Config::getSPI().setMOSI(11);
+	Waveshare_ILI9486_Config::getSPI().setMISO(12);
+	Waveshare_ILI9486_Config::getSPI().setSCK(10);
+	Waveshare_ILI9486_Config::getSPI().setCS(Waveshare_ILI9486_Config::LCD_CS);
+	*/
+
+	Waveshare_ILI9486_Config::getSPI().begin();
 	Waveshield.begin();
 }
 

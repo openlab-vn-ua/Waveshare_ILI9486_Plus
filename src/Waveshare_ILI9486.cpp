@@ -104,14 +104,17 @@ namespace Waveshare_ILI9486_Config
 #endif
 
 	// SPI Channel to use (SPI or SPI1)
-	decltype(SPI)&  SPI_PORT = SPI; // By default spi0
+	decltype(SPI)*  SPI_PORT_P = &SPI; // By default spi0
 
 	#if defined(ARDUINO_ARCH_RP2040)
-	decltype(spi0) getPicoSPI(decltype(SPI)& s) { return (((&(s)) == &(SPI)) ? spi0 : spi1); }
+	decltype(spi0) getPicoSPI(decltype(SPI)& s) 
+	{
+		return (((&(s)) == (&(SPI))) ? spi0 : spi1); 
+	}
 	#endif
 }
 
-#define SPI SPI_PORT // to keep changes minimum
+#define SPI (*(SPI_PORT_P)) // to keep changes minimum
 
 namespace
 {

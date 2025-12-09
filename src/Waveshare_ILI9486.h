@@ -124,7 +124,9 @@ namespace Waveshare_ILI9486_Config
 	extern int SD_CS;
 
 	// SPI Channel to use // By default SPI // on pi pico may be SPI/SPI1
-	extern decltype(SPI)& SPI_PORT;
+	extern decltype(SPI)* SPI_PORT_P;
+	inline void setSPI(decltype(SPI)& s) { SPI_PORT_P = &s; }
+	inline decltype(SPI)& getSPI() { return *SPI_PORT_P; }
 }
 
 //  Straight hardware access.
