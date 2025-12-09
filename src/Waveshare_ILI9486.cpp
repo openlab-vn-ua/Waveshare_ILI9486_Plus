@@ -303,6 +303,39 @@ namespace
 #elif defined ARDUINO_ARCH_AVR
 		//  On AVR it's pretty easy to write a better bulk repeat directly, so use that.
 		transfer16Repeat(data, count);
+#elif defined(ARDUINO_ARCH_RP2040)
+		if (count <= 0) { return; }
+		constexpr long  bufMaxSize = 64; // 16 seems min, 32 good, 64 best
+		static uint16_t buf[bufMaxSize]; // make static to keep stack
+		uint16_t        bufFill = data;
+
+		if (_tftSpiSettingsWrite.getBitOrder() == MSBFIRST)
+		{
+			bufFill = (data >> 8) | (data << 8); // swap uint16_t bytes
+		}
+		else
+		{
+			bufFill = data;
+		}
+
+		if (count <= bufMaxSize)
+		{
+			for (int i = 0; i < count; i++) { buf[i] = bufFill; }
+			SPI.transfer(&buf, nullptr, count * sizeof(buf[0]));
+		}
+		else
+		{
+			for (int i = 0; i < bufMaxSize; i++) { buf[i] = bufFill; }
+			while(count >= bufMaxSize)
+			{
+				SPI.transfer(&buf, nullptr, sizeof(buf));
+				count -= bufMaxSize;
+			}
+			if (count > 0)
+			{
+				SPI.transfer(&buf, nullptr, count * sizeof(buf[0]));
+			}
+		}
 #else
 		//  Otherwise, just do it the boring way.
 		for (unsigned long i = 0; i < count; i++)
