@@ -26,8 +26,7 @@
 
 #include "Waveshare_ILI9486.h"
 
-
-namespace
+namespace Waveshare_ILI9486_Config
 {
 #ifdef ARDUINO_ESP8266_WEMOS_D1R1
 	//GPIO config
@@ -38,14 +37,14 @@ namespace
 	//  the reboot process.  D1 is Serial TX, you probably want that for debugging.
 	//  So, you can't plug the shield into a D1 R1, you need to map the pins.
 	//
-	#define LCD_CS D10 //  LCD Chip Select
-	#define LCD_BL D8  //  LCD Backlight
-	#define LCD_RST D4  //  LCD Reset
-	#define LCD_DC D3  //  LCD Data/Control
+	static inline int LCD_CS = D10; //  LCD Chip Select
+	static inline int LCD_BL = D8;  //  LCD Backlight
+	static inline int LCD_RST = D4;  //  LCD Reset
+	static inline int LCD_DC = D3;  //  LCD Data/Control
 
-	#define TP_CS D0
+	static inline int TP_CS = D0;
 
-	#define SD_CS D2
+	static inline int SD_CS = D2;
 #elif defined ARDUINO_ESP32_DEV
 
 	//  TO-DO - is this specific enough?  Pins below are for Wemos D1 R32, but that
@@ -58,55 +57,84 @@ namespace
 		digitalWrite(pin, val ? HIGH : LOW);
 	}
 
-	#define LCD_CS 5  // 10; //  LCD Chip Select
-	#define LCD_BL 13 // 9;  //  LCD Backlight
-	#define LCD_RST 12 // 8;  //  LCD Reset
-	#define LCD_DC 14 // 7;  //  LCD Data/Control
+	static inline int LCD_CS = 5;  // 10; //  LCD Chip Select
+	static inline int LCD_BL = 13; // 9;  //  LCD Backlight
+	static inline int LCD_RST = 12; // 8;  //  LCD Reset
+	static inline int LCD_DC = 14; // 7;  //  LCD Data/Control
 
-	#define TP_IRQ 25  // 3
-	#define TP_BUSY 27 // 6
+	static inline int TP_CS = 17;   // 4;
+	static inline int TP_IRQ = 25;  // 3
+	static inline int TP_BUSY = 27; // 6
 
-	#define SD_CS 16   // 5;
+	static inline int SD_CS = 16;   // 5;
 
 #elif defined(ARDUINO_ARCH_RP2040)
 
-  // LCD
-	#define LCD_CS 5   //  LCD Chip Select
-	// #define LCD_BL 0   //  LCD Backlight - unused
-	#define LCD_RST 10 //  LCD Reset
-	#define LCD_DC 11  //  LCD Data/Control
+	//GPIO config
+	// LCD
+	static inline int LCD_CS = 5;   //  LCD Chip Select
+	static inline int LCD_BL = -1;  //  LCD Backlight -1=unused
+	static inline int LCD_RST = 10; //  LCD Reset
+	static inline int LCD_DC = 11;  //  LCD Data/Control
 
-  // Touch panel
-	#define TP_CS 7    // UNUSED
-	#define TP_IRQ 8   // UNUSED
-	#define TP_BUSY 12 // UNUSED
+	// Touch panel
+	static inline int TP_CS = 7;    // UNUSED
+	static inline int TP_IRQ = 8;   // UNUSED
+	static inline int TP_BUSY = 12; // UNUSED
 
-	#define SD_CS 13   // UNUSED
+	static inline int SD_CS = 13;   // UNUSED
+
+	// SPI Channel to use (SPI or SPI1)
+	static auto&      MAIN_SPI = SPI; // By default spi0
 
 #else
 
 	//GPIO config
 	//LCD
-	#define LCD_CS 10 //  LCD Chip Select
-	#define LCD_BL 9  //  LCD Backlight
-	#define LCD_RST 8  //  LCD Reset
-	#define LCD_DC 7  //  LCD Data/Control
+	static inline LCD_CS = 10; //  LCD Chip Select
+	static inline LCD_BL = 9;  //  LCD Backlight
+	static inline LCD_RST = 8;  //  LCD Reset
+	static inline LCD_DC = 7;  //  LCD Data/Control
 
-	#define TP_CS 4
-	#define TP_IRQ 3
-	#define TP_BUSY 6
+	static inline TP_CS = 4;
+	static inline TP_IRQ = 3;
+	static inline TP_BUSY = 6;
 
-	#define SD_CS 5
+	static inline SD_CS = 5;
 
 #endif
+}
+
+#if defined(ARDUINO_ARCH_RP2040)
+	#define SPI MAIN_SPI
+#endif
+
+#if defined(ARDUINO_ARCH_RP2040)
+	#define getPicoSPI(s) (((&(s)) == &(SPI)) ? spi0 : spi1)
+#endif
+
+namespace
+{
+	using namespace Waveshare_ILI9486_Config;
+	
+	#if !defined(digitalWriteFast) // For platforms that has digitalWriteFast like pi pico
+	#define digitalWriteFast digitalWrite
+	#define digitalWriteFastDefinedLocally
+	#endif
+
+
 	//  Dimensions in default rotation.
 	constexpr int16_t LCD_WIDTH = 320;
 	constexpr int16_t LCD_HEIGHT = 480;
 
 	//  Data sheets says min clock width is 66ns, for a max clock of 15 MHz.  Except, this
 	//  thing isn't *actually* SPI!  It's a 16 bit shift register connected to the parallel
-	//  interface, and that can run at 20 Mhz (from testing this one runs at a max of 40MHz(!))
-	SPISettings _tftSpiSettingsWrite(40'000'000, MSBFIRST, SPI_MODE0);
+	//  interface, and that can run at 20 Mhz
+#if defined(ARDUINO_ARCH_RP2040)
+	SPISettings _tftSpiSettingsWrite(40000000, MSBFIRST, SPI_MODE0); // (from testing this one runs at a max of 40MHz(!))
+#else
+	SPISettings _tftSpiSettingsWrite(20000000, MSBFIRST, SPI_MODE0);
+#endif
 
 	//  TFT reads are slower, 150 ns period.
 	//  Nevermind, Waveshare shield doesn't support reads at all!
@@ -118,11 +146,9 @@ namespace
 
 	inline void lcdWriteReg(uint8_t reg)
 	{
-#ifdef ARDUINO_ARCH_RP2040
-		sio_hw->gpio_clr = (1ul << LCD_DC);
-#else
-		digitalWrite(LCD_DC, LOW);
-#endif
+
+		digitalWriteFast(LCD_DC, LOW);
+
 #ifdef ARDUINO_ESP32_DEV
 		SPI.write16(reg);
 #else
@@ -133,16 +159,16 @@ namespace
 
 	inline void lcdWriteData(uint8_t data)
 	{
-#ifdef ARDUINO_ARCH_RP2040
-		sio_hw->gpio_set = (1ul << LCD_DC);
-#else
-		digitalWrite(LCD_DC, HIGH);
-#endif
+		digitalWriteFast(LCD_DC, HIGH);
+
 #ifdef ARDUINO_ESP32_DEV
 		SPI.write16(data);
-#else
+#elif defined(ARDUINO_ARCH_RP2040)
 		uint8_t buf[] = { 0, data };
-		spi_write_blocking(spi0, buf, sizeof(buf));
+		spi_write_blocking(getPicoSPI(SPI), buf, sizeof(buf));
+#else
+		SPI.transfer(0);
+		SPI.transfer(data);
 #endif
 	}
 
@@ -150,26 +176,35 @@ namespace
 	{
 #ifdef ARDUINO_ESP32_DEV
 		SPI.write16(data);
-#else
+#elif defined(ARDUINO_ARCH_RP2040)
 		uint8_t buf[] = { 0, data };
-		spi_write_blocking(spi0, buf, sizeof(buf));
+		spi_write_blocking(getPicoSPI(SPI), buf, sizeof(buf));
+#else
+		SPI.transfer(0);
+		SPI.transfer(data);
 #endif
 	}
 
 
 	inline void lcdWriteData16(uint16_t data)
 	{
-#ifdef ARDUINO_ARCH_RP2040
-		sio_hw->gpio_set = (1ul << LCD_DC);
+		digitalWriteFast(LCD_DC, HIGH);
+#if defined(ARDUINO_ARCH_RP2040)
+		spi_write16_blocking(getPicoSPI(SPI), &data, 1);
 #else
-		digitalWrite(LCD_DC, HIGH);
+		lcdWriteData(uint8_t(data >> 8));
+		lcdWriteDataContinue(uint8_t(data & 0xff));
 #endif
-		spi_write16_blocking(spi0, &data, 1);
 	}
 
 	inline void lcdWriteDataContinue16(uint16_t data)
 	{
-		spi_write16_blocking(spi0, &data, 1);
+#if defined(ARDUINO_ARCH_RP2040)
+		spi_write16_blocking(getPicoSPI(SPI), &data, 1);
+#else
+		lcdWriteDataContinue(uint8_t(data >> 8));
+		lcdWriteDataContinue(uint8_t(data & 0xff));
+#endif
 	}
 
 #ifdef ARDUINO_ARCH_AVR
@@ -282,7 +317,7 @@ namespace
 #ifdef ARDUINO_ESP32_DEV
 		SPI.writePixels((const uint8_t *)pData, count * 2);
 #elif defined(ARDUINO_ARCH_RP2040)
-    spi_write16_blocking(spi0, pData, count);
+		spi_write16_blocking(getPicoSPI(SPI), pData, count);
 #else
 		while (count--)
 		{
@@ -318,21 +353,21 @@ namespace
 		//  time.
 		ActiveBounds b = {0, (uint8_t)(xStart >> 8), 0, (uint8_t)(xStart & 0xFF), 0, (uint8_t)(xEnd >> 8), 0, (uint8_t)(xEnd & 0xFF)};
 		lcdWriteReg(0x2a);
-#ifdef ARDUINO_ARCH_RP2040
-		sio_hw->gpio_set = (1ul << LCD_DC);
+		digitalWriteFast(LCD_DC, HIGH);
+#if defined(ARDUINO_ARCH_RP2040)
+		spi_write_blocking(getPicoSPI(SPI), (byte *)&b, sizeof(b));
 #else
-		digitalWrite(LCD_DC, HIGH);
+		SPI.writeBytes((byte *)&b, sizeof(b));
 #endif
-		spi_write_blocking(spi0, (byte *)&b, sizeof(b));
 
 		b = {0, (uint8_t)(yStart >> 8), 0, (uint8_t)(yStart & 0xFF), 0, (uint8_t)(yEnd >> 8), 0, (uint8_t)(yEnd & 0xFF)};
 		lcdWriteReg(0x2b);
-#ifdef ARDUINO_ARCH_RP2040
-		sio_hw->gpio_set = (1ul << LCD_DC);
+		digitalWriteFast(LCD_DC, HIGH);
+#if defined(ARDUINO_ARCH_RP2040)
+		spi_write_blocking(getPicoSPI(SPI), (byte *)&b, sizeof(b));
 #else
-		digitalWrite(LCD_DC, HIGH);
+		SPI.writeBytes((byte *)&b, sizeof(b));
 #endif
-		spi_write_blocking(spi0, (byte *)&b, sizeof(b));
 	}
 }
 
@@ -347,10 +382,12 @@ namespace Waveshare_ILI9486_Impl
 		pinMode(LCD_RST, OUTPUT);
 		digitalWrite(LCD_RST, HIGH);
 		pinMode(LCD_DC, OUTPUT);
-#ifdef LCD_BL
-		pinMode(LCD_BL, OUTPUT);
-		analogWrite(LCD_BL, 0);
-#endif
+
+		if (LCD_BL >= 0)
+		{
+			pinMode(LCD_BL, OUTPUT);
+			analogWrite(LCD_BL, 0);
+		}
 
 		pinMode(TP_CS, OUTPUT);
 		digitalWrite(TP_CS, HIGH);
@@ -364,20 +401,17 @@ namespace Waveshare_ILI9486_Impl
 	void startWrite()
 	{
 		SPI.beginTransaction(_tftSpiSettingsWrite);
-#ifdef ARDUINO_ARCH_RP2040
-		sio_hw->gpio_clr = (1ul << LCD_CS);
-#else
-		digitalWrite(LCD_CS, LOW);
-#endif
+		digitalWriteFast(LCD_CS, LOW);
 	}
 
 	void initializeLcd()
 	{
-    spi_set_format(spi0, 16, (spi_cpol_t)0, (spi_cpha_t)0, SPI_MSB_FIRST);
-
+#if defined(ARDUINO_ARCH_RP2040)
+		spi_set_format(getPicoSPI(SPI), 16, (spi_cpol_t)0, (spi_cpha_t)0, SPI_MSB_FIRST);
+#endif
 		//  Trigger hardware reset.
-		// digitalWrite(LCD_RST, HIGH);
-		// delay(5);
+		digitalWrite(LCD_RST, HIGH);
+		delay(5);
 		digitalWrite(LCD_RST, LOW);
 		delayMicroseconds(20);
 		digitalWrite(LCD_RST, HIGH);
@@ -483,10 +517,10 @@ namespace Waveshare_ILI9486_Impl
 
 			lcdWriteReg(0x11); // Sleep out
 
-			lcdWriteReg(0x29);  // Turn on display
-
 			//  Fill screen to black
 			writeFillRect2(0, 0, LCD_WIDTH, LCD_HEIGHT, 0x0000);
+
+			lcdWriteReg(0x29);  // Turn on display
 		}
 		endWrite();
 	}
@@ -508,12 +542,7 @@ namespace Waveshare_ILI9486_Impl
 
 	void endWrite()
 	{
-#ifdef ARDUINO_ARCH_RP2040
-		sio_hw->gpio_set = (1ul << LCD_CS);
-#else
-		digitalWrite(LCD_CS, HIGH);
-#endif
-		
+		digitalWriteFast(LCD_CS, HIGH);
 		SPI.endTransaction();
 	}
 
@@ -567,15 +596,20 @@ namespace Waveshare_ILI9486_Impl
 
 	void setScreenBrightness(uint8_t brightness)
 	{
-#ifdef LCD_BL
-		analogWrite(LCD_BL, brightness);
-#endif
+		if (LCD_BL >= 0)
+		{
+			analogWrite(LCD_BL, brightness);
+		}
 	}
 
 	unsigned int GetSdCardCS()
 	{
 		return SD_CS;
 	}
+
+	#if !defined(digitalWriteFastDefinedLocally)
+	#undef  digitalWriteFast
+	#endif
 }
 
 //  Touchscreen interface
@@ -877,3 +911,10 @@ WaveshareTouchScreen::normalizeTsPoint(
 	return fReturn;
 }
 
+#if defined(ARDUINO_ARCH_RP2040)
+	#undef SPI
+#endif
+
+#if defined(ARDUINO_ARCH_RP2040)
+	#undef getPicoSPI
+#endif
