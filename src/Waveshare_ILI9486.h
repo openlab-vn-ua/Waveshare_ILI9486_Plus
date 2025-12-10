@@ -223,7 +223,7 @@ template<class Baseclass>
 Waveshare_ILI9486_Template<Baseclass>::Waveshare_ILI9486_Template()
 	:Baseclass(LCD_WIDTH, LCD_HEIGHT)
 {
-	Waveshare_ILI9486_Impl::initializePins();
+	// Waveshare_ILI9486_Impl::initializePins(); // should not be called too early in constrctor, as pins minght not be set yet
 }
 
 template<class Baseclass>
