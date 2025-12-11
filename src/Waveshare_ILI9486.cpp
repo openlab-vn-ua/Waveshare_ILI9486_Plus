@@ -754,12 +754,14 @@ constexpr uint16_t _rxplate = 300;
 uint16_t
 WaveshareTouchScreen::pressure()
 {
+	if (TP_CS < 0) { return 0; }
+
 	uint32_t z1 = readChannel(0b10110000);
 	uint32_t z2 = readChannel(0b11000000);
 
 	float rtouch;
 	rtouch = z2;
-	rtouch /= z1;
+	if (z1 != 0) { rtouch /= z1; } // avoid division by zero (bug trap)
 	//rtouch -= 1;
 	rtouch *= ((uint16_t)(readTouchX()));
 	rtouch *= _rxplate;
