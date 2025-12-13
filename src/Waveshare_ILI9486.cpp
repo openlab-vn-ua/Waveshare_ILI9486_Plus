@@ -112,6 +112,8 @@ namespace Waveshare_ILI9486_Config
 		return (((&(s)) == (&(SPI))) ? spi0 : spi1); 
 	}
 	#endif
+
+	int TP_NUMSAMPLES = TP_NUMSAMPLES_DEF;
 }
 
 #define SPI (*(SPI_PORT_P)) // to keep changes minimum
@@ -664,13 +666,12 @@ namespace Waveshare_ILI9486_Impl
 
 //  Touchscreen interface
 
+// NSAPMPLES
 // increase or decrease the touchscreen oversampling. This is a little different than you make think:
 // 1 is no oversampling, whatever data we get is immediately returned
 // 2 is double-sampling and we only return valid data if both points are the same
 // 3+ uses insert sort to get the median value.
 // We found 2 is precise yet not too slow so we suggest sticking with it!
-
-#define NUMSAMPLES 2
 
 
 //  TSPoint code taken from Adafruit 'Touchscreen' library, MIT licence.
@@ -696,7 +697,6 @@ bool TSPoint::operator!=(TSPoint p1)
 	return  ((p1.x != x) || (p1.y != y) || (p1.z != z));
 }
 
-#if (NUMSAMPLES > 2)
 static void insert_sort(int array[], uint8_t size)
 {
 	uint8_t j;
@@ -710,7 +710,6 @@ static void insert_sort(int array[], uint8_t size)
 		array[j] = save;
 	}
 }
-#endif
 
 
 //  Not implemented in Adafruit libraries?
@@ -789,67 +788,87 @@ constexpr int slop = 7;
 TSPoint
 WaveshareTouchScreen::getPoint()
 {
+	if (TP_CS < 0) { return TSPoint(0, 0, TSPoint::Z_TOUCHVOID); }
+
 	int x, y, z;
-	int samples[NUMSAMPLES];
+	int samples[TP_NUMSAMPLES_MAX];
 	uint8_t i, valid;
+
+	int NUMSAMPLES = TP_NUMSAMPLES;
+	if (NUMSAMPLES <= 0) { NUMSAMPLES = 1; }
+	if (NUMSAMPLES  > TP_NUMSAMPLES_MAX) { NUMSAMPLES = TP_NUMSAMPLES_MAX; }
 
 	valid = 1;
 
 	//  Discard first reading, other code indicates it's noisy.
 	readTouchX();
 
+	bool xIsVoid = true;
+	constexpr int xRawVoid = 0; // no touch 
 	for (i = 0; i < NUMSAMPLES; i++)
 	{
 		samples[i] = readTouchX();
+		if (samples[i] != xRawVoid) { xIsVoid = false; } // TODO: Handle the case when state changes during read
 	}
 
-#if NUMSAMPLES > 2
-	insert_sort(samples, NUMSAMPLES);
-#endif
-#if NUMSAMPLES == 2
-	// Allow small amount of measurement noise, because capacitive
-	// coupling to a TFT display's signals can induce some noise.
-	if (samples[0] - samples[1] < -slop || samples[0] - samples[1] > slop)
+	if (NUMSAMPLES > 2)
 	{
-		valid = 0;
+		insert_sort(samples, NUMSAMPLES);
 	}
-	else
+	else if (NUMSAMPLES == 2)
 	{
-		samples[1] = (samples[0] + samples[1]) >> 1; // average 2 samples
+	 	// Allow small amount of measurement noise, because capacitive
+	 	// coupling to a TFT display's signals can induce some noise.
+	 	if (samples[0] - samples[1] < -slop || samples[0] - samples[1] > slop)
+	 	{
+	 		valid = 0;
+	 	}
+	 	else
+	 	{
+	 		samples[1] = (samples[0] + samples[1]) >> 1; // average 2 samples
+	 	}
 	}
-#endif
 
 	// Match 10 bit resolution of Adafruit touchplates
 	x = (1023 - (samples[NUMSAMPLES / 2] >> 2));
-	if (x == 1023) x = 0;
+	if (x == 1023) { x = 0; }
 
 
+	bool yIsVoid = true;
+	constexpr int yRawVoid = 4095; // no touch
 	for (i = 0; i < NUMSAMPLES; i++)
 	{
 		samples[i] = readTouchY();
+		if (samples[i] != yRawVoid) { yIsVoid = false; } // TODO: Handle the case when state changes during read
 	}
 
-#if NUMSAMPLES > 2
-	insert_sort(samples, NUMSAMPLES);
-#endif
-#if NUMSAMPLES == 2
-	// Allow small amount of measurement noise, because capacitive
-	// coupling to a TFT display's signals can induce some noise.
-	if (samples[0] - samples[1] < -slop || samples[0] - samples[1] > slop)
+	if (NUMSAMPLES > 2)
 	{
-		valid = 0;
+		insert_sort(samples, NUMSAMPLES);
 	}
-	else
+	else if (NUMSAMPLES == 2)
 	{
-		samples[1] = (samples[0] + samples[1]) >> 1; // average 2 samples
+		// Allow small amount of measurement noise, because capacitive
+		// coupling to a TFT display's signals can induce some noise.
+		if (samples[0] - samples[1] < -slop || samples[0] - samples[1] > slop)
+		{
+			valid = 0;
+		}
+		else
+		{
+			samples[1] = (samples[0] + samples[1]) >> 1; // average 2 samples
+		}
 	}
-#endif
 
 	y = (1023 - (samples[NUMSAMPLES / 2] >> 2));
 
-	if (!valid)
+	if (xIsVoid && yIsVoid)
 	{
-		return TSPoint(0, 0, 0);
+		return TSPoint(0, 0, TSPoint::Z_TOUCHVOID);
+	}
+	else if (!valid)
+	{
+		return TSPoint(0, 0, TSPoint::Z_TOUCHVOID);
 	}
 	else if ((x == 0) && (y == 0))
 	{
@@ -906,6 +925,8 @@ WaveshareTouchScreen::normalizeTsPoint(
 	TSPoint &p,
 	uint8_t rotation)
 {
+	if (p.isVoid()) { return false; }
+
 	bool fReturn = false;
 
 	if (p.x > 0)

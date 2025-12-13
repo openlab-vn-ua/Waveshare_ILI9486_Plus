@@ -63,6 +63,10 @@ public:
 	bool operator!=(TSPoint);
 
 	int16_t x, y, z;
+
+	static constexpr int16_t Z_TOUCHVOID = -1; // signal as no touch detected
+
+	bool isVoid() { return z < 0; }
 };
 
 
@@ -127,6 +131,11 @@ namespace Waveshare_ILI9486_Config
 	extern decltype(SPI)* SPI_PORT_P;
 	inline void setSPI(decltype(SPI)& s) { SPI_PORT_P = &s; }
 	inline decltype(SPI)& getSPI() { return *SPI_PORT_P; }
+
+	static constexpr int TP_NUMSAMPLES_MAX = 5;
+	static constexpr int TP_NUMSAMPLES_DEF = 1; // default as 2, but it may produce phantom on-off
+
+	extern int TP_NUMSAMPLES;
 }
 
 //  Straight hardware access.
