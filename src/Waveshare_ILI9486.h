@@ -64,9 +64,8 @@ public:
 
 	int16_t x, y, z;
 
-	static constexpr int16_t Z_TOUCHVOID = -1; // signal as no touch detected
-
-	bool isVoid() { return z < 0; }
+	// z (pressure) of 0 means no pressing!
+	static constexpr int16_t Z_TOUCHVOID = 0; // signal as no touch detected
 };
 
 

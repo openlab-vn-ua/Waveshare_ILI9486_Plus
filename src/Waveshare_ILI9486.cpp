@@ -872,7 +872,7 @@ WaveshareTouchScreen::getPoint()
 	}
 	else if ((x == 0) && (y == 0))
 	{
-		return TSPoint(0, 0, 0);
+		return TSPoint(0, 0, TSPoint::Z_TOUCHVOID); // just in case?
 	}
 	else
 	{
@@ -925,7 +925,7 @@ WaveshareTouchScreen::normalizeTsPoint(
 	TSPoint &p,
 	uint8_t rotation)
 {
-	if (p.isVoid()) { return false; }
+	if (p.z <= 0) { return false; }
 
 	bool fReturn = false;
 
